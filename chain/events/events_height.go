@@ -2,6 +2,7 @@ package events
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"go.opencensus.io/trace"
@@ -63,6 +64,8 @@ func (e *heightEvents) ChainAt(ctx context.Context, hnd HeightHandler, rev Rever
 	}
 	triggerAt := h + abi.ChainEpoch(confidence)
 
+	fmt.Printf("ChainAt: target epoch %d, confidence %d, e.confidence %d, trigger at %d", h, confidence, e.gcConfidence, triggerAt)
+
 	// Here we try to jump onto a moving train. To avoid stopping the train, we release the lock
 	// while calling the API and/or the trigger functions. Unfortunately, it's entirely possible
 	// (although unlikely) to go back and forth across the trigger heights, so we need to keep
@@ -83,6 +86,7 @@ func (e *heightEvents) ChainAt(ctx context.Context, hnd HeightHandler, rev Rever
 			if head.Height() == h {
 				ts = head
 			} else {
+				fmt.Printf("ChainAt: getting tipset after height")
 				var err error
 				ts, err = e.api.ChainGetTipSetAfterHeight(ctx, handler.height, head.Key())
 				if err != nil {
@@ -109,6 +113,7 @@ func (e *heightEvents) ChainAt(ctx context.Context, hnd HeightHandler, rev Rever
 			if !handler.called && head.Height() >= triggerAt {
 				ctx, span := trace.StartSpan(ctx, "events.HeightApply")
 				span.AddAttributes(trace.BoolAttribute("immediate", true))
+				fmt.Printf("ChainAt: triggering the callback, height %d", head.Height())
 				err := handler.handle(ctx, handler.ts, head.Height())
 				span.End()
 				if err != nil {
@@ -140,6 +145,7 @@ func (e *heightEvents) ChainAt(ctx context.Context, hnd HeightHandler, rev Rever
 
 		// If we managed to get through this without the head changing, we're finally done.
 		if head.Equals(e.head) {
+			fmt.Printf("ChainAt: registering trigger at %d then return", triggerAt)
 			e.triggerHeights[triggerAt] = append(e.triggerHeights[triggerAt], handler)
 			e.tsHeights[h] = append(e.tsHeights[h], handler)
 			e.lk.Unlock()
