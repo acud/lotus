@@ -64,7 +64,7 @@ func (e *heightEvents) ChainAt(ctx context.Context, hnd HeightHandler, rev Rever
 	}
 	triggerAt := h + abi.ChainEpoch(confidence)
 
-	fmt.Printf("ChainAt: target epoch %d, confidence %d, e.confidence %d, trigger at %d", h, confidence, e.gcConfidence, triggerAt)
+	fmt.Printf("ChainAt: target epoch %d, confidence %d, e.confidence %d, trigger at %d\n", h, confidence, e.gcConfidence, triggerAt)
 
 	// Here we try to jump onto a moving train. To avoid stopping the train, we release the lock
 	// while calling the API and/or the trigger functions. Unfortunately, it's entirely possible
@@ -86,11 +86,11 @@ func (e *heightEvents) ChainAt(ctx context.Context, hnd HeightHandler, rev Rever
 			if head.Height() == h {
 				ts = head
 			} else {
-				fmt.Printf("ChainAt: getting tipset after height")
+				fmt.Printf("ChainAt: getting tipset after height\n")
 				var err error
 				ts, err = e.api.ChainGetTipSetAfterHeight(ctx, handler.height, head.Key())
 				if err != nil {
-					return xerrors.Errorf("events.ChainAt: failed to get tipset: %s", err)
+					return xerrors.Errorf("events.ChainAt: failed to get tipset: %s\n", err)
 				}
 			}
 
@@ -113,7 +113,7 @@ func (e *heightEvents) ChainAt(ctx context.Context, hnd HeightHandler, rev Rever
 			if !handler.called && head.Height() >= triggerAt {
 				ctx, span := trace.StartSpan(ctx, "events.HeightApply")
 				span.AddAttributes(trace.BoolAttribute("immediate", true))
-				fmt.Printf("ChainAt: triggering the callback, height %d", head.Height())
+				fmt.Printf("ChainAt: triggering the callback, height %d\n", head.Height())
 				err := handler.handle(ctx, handler.ts, head.Height())
 				span.End()
 				if err != nil {
@@ -145,7 +145,7 @@ func (e *heightEvents) ChainAt(ctx context.Context, hnd HeightHandler, rev Rever
 
 		// If we managed to get through this without the head changing, we're finally done.
 		if head.Equals(e.head) {
-			fmt.Printf("ChainAt: registering trigger at %d then return", triggerAt)
+			fmt.Printf("ChainAt: registering trigger at %d then return\n", triggerAt)
 			e.triggerHeights[triggerAt] = append(e.triggerHeights[triggerAt], handler)
 			e.tsHeights[h] = append(e.tsHeights[h], handler)
 			e.lk.Unlock()

@@ -508,7 +508,7 @@ func (m *Sealing) handleWaitSeed(ctx statemachine.Context, sector SectorInfo) er
 	fmt.Printf("handleWaitSeed: fetching PCI\n")
 	pci, err := m.Api.StateSectorPreCommitInfo(ctx.Context(), m.maddr, sector.SectorNumber, ts.Key())
 	if err != nil {
-		fmt.Printf("handleWaitSeed: error fetching PCI: %v", err)
+		fmt.Printf("handleWaitSeed: error fetching PCI: %v\n", err)
 		return xerrors.Errorf("getting precommit info: %w", err)
 	}
 	if pci == nil {
@@ -520,7 +520,7 @@ func (m *Sealing) handleWaitSeed(ctx statemachine.Context, sector SectorInfo) er
 	fmt.Printf("handleWaitSeed: got PCI! PC epoch %d, challange delay %d, random height %d\n",
 		pci.PreCommitEpoch, policy.GetPreCommitChallengeDelay(), randHeight)
 
-	fmt.Printf("handleWaitSeed: registering notification on ChainAt at epoch %d, PoRepConfidence %d",
+	fmt.Printf("handleWaitSeed: registering notification on ChainAt at epoch %d, PoRepConfidence %d\n",
 		randHeight, InteractivePoRepConfidence)
 
 	err = m.events.ChainAt(context.Background(), func(ectx context.Context, tts *types.TipSet, curH abi.ChainEpoch) error {
@@ -539,7 +539,7 @@ func (m *Sealing) handleWaitSeed(ctx statemachine.Context, sector SectorInfo) er
 		if err := m.maddr.MarshalCBOR(buf); err != nil {
 			return err
 		}
-		fmt.Printf("handleWaitSeed: miner address after CBOR marshal: %v", buf)
+		fmt.Printf("handleWaitSeed: miner address after CBOR marshal: %v\n", buf)
 		fmt.Printf("handleWaitSeed: getting randomness from beacon. epoch %d miner cbor %v tipset %v\n",
 			randHeight, buf.Bytes(), ts.Key().Bytes())
 		rand, err := m.Api.StateGetRandomnessFromBeacon(ectx, crypto.DomainSeparationTag_InteractiveSealChallengeSeed, randHeight, buf.Bytes(), ts.Key())
@@ -549,7 +549,7 @@ func (m *Sealing) handleWaitSeed(ctx statemachine.Context, sector SectorInfo) er
 			_ = ctx.Send(SectorChainPreCommitFailed{error: err})
 			return err
 		}
-		fmt.Printf("handleWaitSeed: got sector seed! epoch %d randomness: %v", randHeight, rand)
+		fmt.Printf("handleWaitSeed: got sector seed! epoch %d randomness: %v\n", randHeight, rand)
 
 		_ = ctx.Send(SectorSeedReady{SeedValue: abi.InteractiveSealRandomness(rand), SeedEpoch: randHeight})
 
