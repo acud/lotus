@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -502,29 +503,45 @@ func (m *Sealing) handleWaitSeed(ctx statemachine.Context, sector SectorInfo) er
 		return nil
 	}
 
+	fmt.Printf("handleWaitSeed: initial typeset key %s, miner %s, sector number: %d \n",
+		ts.Key(), m.maddr, sector.SectorNumber)
+	fmt.Printf("handleWaitSeed: fetching PCI\n")
 	pci, err := m.Api.StateSectorPreCommitInfo(ctx.Context(), m.maddr, sector.SectorNumber, ts.Key())
 	if err != nil {
+		fmt.Printf("handleWaitSeed: error fetching PCI: %v\n", err)
 		return xerrors.Errorf("getting precommit info: %w", err)
 	}
 	if pci == nil {
+		fmt.Println("handleWaitSeed: empty PCI")
 		return ctx.Send(SectorChainPreCommitFailed{error: xerrors.Errorf("precommit info not found on chain")})
 	}
 
 	randHeight := pci.PreCommitEpoch + policy.GetPreCommitChallengeDelay()
+	fmt.Printf("handleWaitSeed: got PCI! PC epoch %d, challange delay %d, random height %d\n",
+		pci.PreCommitEpoch, policy.GetPreCommitChallengeDelay(), randHeight)
 
-	err = m.events.ChainAt(context.Background(), func(ectx context.Context, _ *types.TipSet, curH abi.ChainEpoch) error {
+	fmt.Printf("handleWaitSeed: registering notification on ChainAt at epoch %d, PoRepConfidence %d\n",
+		randHeight, InteractivePoRepConfidence)
+
+	err = m.events.ChainAt(context.Background(), func(ectx context.Context, tts *types.TipSet, curH abi.ChainEpoch) error {
 		// in case of null blocks the randomness can land after the tipset we
 		// get from the events API
+		fmt.Printf("handleWaitSeed: ChainAt callback woke up at epoch %d, tipset key %s, fetching current chain head\n", tts.Height(), tts.Key().String())
 		ts, err := m.Api.ChainHead(ctx.Context())
 		if err != nil {
 			log.Errorf("handleCommitting: api error, not proceeding: %+v", err)
 			return nil
 		}
 
+		fmt.Printf("handleWaitSeed: got current head, epoch %d tipset key %s\n", ts.Height(), ts.Key().String())
+
 		buf := new(bytes.Buffer)
 		if err := m.maddr.MarshalCBOR(buf); err != nil {
 			return err
 		}
+		fmt.Printf("handleWaitSeed: miner address after CBOR marshal: %v\n", buf)
+		fmt.Printf("handleWaitSeed: getting randomness from beacon. epoch %d miner cbor %v tipset %v\n",
+			randHeight, buf.Bytes(), ts.Key().Bytes())
 		rand, err := m.Api.StateGetRandomnessFromBeacon(ectx, crypto.DomainSeparationTag_InteractiveSealChallengeSeed, randHeight, buf.Bytes(), ts.Key())
 		if err != nil {
 			err = xerrors.Errorf("failed to get randomness for computing seal proof (ch %d; rh %d; tsk %x): %w", curH, randHeight, ts.Key(), err)
@@ -532,6 +549,7 @@ func (m *Sealing) handleWaitSeed(ctx statemachine.Context, sector SectorInfo) er
 			_ = ctx.Send(SectorChainPreCommitFailed{error: err})
 			return err
 		}
+		fmt.Printf("handleWaitSeed: got sector seed! epoch %d randomness: %v\n", randHeight, rand)
 
 		_ = ctx.Send(SectorSeedReady{SeedValue: abi.InteractiveSealRandomness(rand), SeedEpoch: randHeight})
 
